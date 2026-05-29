@@ -1,0 +1,11 @@
+{
+  "_comment": "EXAMPLE portfolio for demo purposes only — not real positions. Copy to holdings.json and replace with your own. weight = fraction of total. moat blank = engine flags it. is_etf:true skips company-quality analysis (ETFs have no ROIC/FCF). shares + entry_price drive live P&L in portfolio.py.",
+  "holdings": [
+    {"ticker": "AAPL",  "shares": 5.0,  "entry_price": 180.00, "weight": 0.25, "moat": "Ecosystem lock-in + brand + services flywheel"},
+    {"ticker": "MSFT",  "shares": 2.0,  "entry_price": 380.00, "weight": 0.20, "moat": "Enterprise lock-in + Azure cloud scale"},
+    {"ticker": "GOOGL", "shares": 3.0,  "entry_price": 300.00, "weight": 0.15, "moat": "Search + ad targeting + cloud"},
+    {"ticker": "NVDA",  "shares": 1.5,  "entry_price": 170.00, "weight": 0.15, "moat": "CUDA software lock-in + AI accelerator dominance"},
+    {"ticker": "QQQ",   "shares": 1.0,  "entry_price": 600.00, "weight": 0.15, "moat": "Nasdaq-100 index ETF (index proxy)", "is_etf": true},
+    {"ticker": "COST",  "shares": 0.5,  "entry_price": 900.00, "weight": 0.10, "moat": "Membership model + scale purchasing"}
+  ]
+}

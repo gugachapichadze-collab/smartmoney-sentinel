@@ -1,0 +1,10 @@
+{
+  "_comment": "EXAMPLE watchlist for demo only. Copy to watchlist.json and edit. trigger = price at/below which the engine flags WATCH-PROXIMITY. tier is your own conviction grouping (A highest).",
+  "watchlist": [
+    {"ticker": "AMZN", "trigger": 215, "tier": "A", "note": "AWS + retail + AI; buy on market dip"},
+    {"ticker": "META", "trigger": 640, "tier": "A", "note": "FoA + subscriptions; AI capex overhang"},
+    {"ticker": "AMD",  "trigger": 230, "tier": "A", "note": "AI accelerators; only below trigger"},
+    {"ticker": "ORCL", "trigger": 160, "tier": "B", "note": "Cloud + OCI AI build-out"},
+    {"ticker": "CRM",  "trigger": 165, "tier": "B", "note": "SaaS + Agentforce; contested AI thesis"}
+  ]
+}

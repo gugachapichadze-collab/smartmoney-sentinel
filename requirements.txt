@@ -1,0 +1,11 @@
+# SmartMoney Sentinel — Python dependencies
+# Install:  pip install -r requirements.txt
+#
+# Tested on Python 3.12.
+
+yfinance>=0.2.40        # market data (info, financials, earnings_dates, history)
+pandas>=2.0            # data handling (yfinance dependency, used directly too)
+anthropic>=0.40.0      # Claude API — daily narration + post-mortem why-engine
+requests>=2.31         # Telegram delivery
+
+# Standard library used (no install needed): sqlite3, datetime, json, os, pathlib

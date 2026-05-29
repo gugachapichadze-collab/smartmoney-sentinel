@@ -1,0 +1,61 @@
+# ───────────────────────────────────────────────────────────────
+#  SECRETS — never commit. A leaked API key in a public repo is
+#  scraped and abused within minutes.
+# ───────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets.json
+config/secrets*
+**/credentials*
+
+# ───────────────────────────────────────────────────────────────
+#  PERSONAL DATA — your real portfolio never goes public.
+#  The repo ships with holdings.example.json instead.
+# ───────────────────────────────────────────────────────────────
+holdings.json
+watchlist.json
+journal.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated briefs / vault output
+Investment Briefs/
+*.brief.md
+out/
+output/
+
+# ───────────────────────────────────────────────────────────────
+#  Python
+# ───────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+.Python
+pip-log.txt
+
+# ───────────────────────────────────────────────────────────────
+#  OS / editor
+# ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# ───────────────────────────────────────────────────────────────
+#  Logs
+# ───────────────────────────────────────────────────────────────
+*.log
+logs/
