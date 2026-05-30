@@ -67,6 +67,18 @@ def _rel_gap(a: float, b: float) -> Optional[float]:
     return abs(a - b) / max(abs(a), abs(b))
 
 
+def _skip_gross_margin(y, fmp_f) -> bool:
+    """Gross margin is not a clean cross-vendor check for asset-light
+    businesses (payment networks, some financials): near-100% or near-0%
+    margins are computed differently by each vendor and always 'disagree'.
+    Skip the comparison there to avoid daily false alarms; keep it for
+    normal-margin businesses where a gap is a real signal."""
+    for v in (getattr(y, 'gross_margin', None), getattr(fmp_f, 'gross_margin', None)):
+        if v is not None and (v > 0.90 or v < 0.05):
+            return True
+    return False
+
+
 def _alert(text: str) -> None:
     """Best-effort Telegram. Never raises — an alert failure can't break a run."""
     try:
@@ -85,6 +97,8 @@ def _compare(y, fmp_f) -> dict:
     """Return {field: (yahoo, fmp, gap)} for fields exceeding tolerance."""
     flags = {}
     for field, tol in _TOLERANCE.items():
+        if field == "gross_margin" and _skip_gross_margin(y, fmp_f):
+            continue
         gap = _rel_gap(getattr(y, field, None), getattr(fmp_f, field, None))
         if gap is not None and gap > tol:
             flags[field] = (getattr(y, field), getattr(fmp_f, field), gap)
