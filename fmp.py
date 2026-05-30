@@ -126,7 +126,7 @@ def fetch(ticker: str, api_key: str, ath: float = 0.0,
         rev_growth=float(_first(growth, "growthRevenue", 0) or 0),
         net_debt_ebitda=float(_first(km, "netDebtToEBITDATTM", 0) or 0),
         ath=float(ath or 0),
-        analyst_fcf_growth=_analyst_fcf_growth(api_key, ticker),
+        analyst_growth=_analyst_fcf_growth(api_key, ticker),
         hist_fcf_cagr=_hist_fcf_cagr(api_key, ticker),
         moat=moat,
     )

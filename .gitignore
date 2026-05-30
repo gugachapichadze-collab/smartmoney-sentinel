@@ -59,3 +59,7 @@ Thumbs.db
 # ───────────────────────────────────────────────────────────────
 *.log
 logs/
+
+# SQLite WAL sidecar files
+*.db-wal
+*.db-shm

@@ -51,6 +51,7 @@ if _env.exists():
             _k, _v = _line.split("=", 1)
             os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 import sqlite3
+import dbconn
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -179,7 +180,7 @@ def main():
     db = Path(args.db)
     if not db.exists():
         print(f"DB not found: {db}", file=sys.stderr); sys.exit(1)
-    con = sqlite3.connect(db)
+    con = dbconn.connect(db)
     ensure_log(con)
 
     todo = closed_outcomes(con, args.horizon)

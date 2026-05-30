@@ -10,6 +10,7 @@ Secrets in ~/.config/guga/.env: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_
 import os
 import json
 import sqlite3
+import dbconn
 import datetime
 from pathlib import Path
 
@@ -20,7 +21,7 @@ import portfolio
 import sell_review
 
 from engine import evaluate, position_health, rank_buys, suggest_size, HURDLE, hard_floors
-import yahoo as data_source
+import datasource as data_source
 
 HERE = Path(__file__).resolve().parent
 env_path = Path.home() / ".config" / "guga" / ".env"
@@ -39,7 +40,7 @@ MAX_ACTIONS = 3
 
 
 def journal_init():
-    con = sqlite3.connect(DB_PATH)
+    con = dbconn.connect(DB_PATH)
     con.execute("""CREATE TABLE IF NOT EXISTS decisions(
         date TEXT, ticker TEXT, kind TEXT, action TEXT,
         price REAL, implied_g REAL, achievable_g REAL, edge REAL,
@@ -108,7 +109,7 @@ def learning_readback():
     """Read the journal back: how have past BUY signals scored over time?
     This is the calibration loop — the system learning from itself."""
     try:
-        con = sqlite3.connect(DB_PATH)
+        con = dbconn.connect(DB_PATH)
         rows = con.execute(
             "SELECT confidence, COUNT(*), AVG(edge) FROM decisions "
             "WHERE action='BUY' GROUP BY confidence").fetchall()
@@ -171,7 +172,7 @@ def build_payload(buys, prox, health, errors):
     lines += _fast or ["  none — no flagged holding is also in a deep price breakdown"]
 
     lines.append("\nSELL-REVIEW (fundamentals-only escalation; flag, not order):")
-    _src = sqlite3.connect(DB_PATH)
+    _src = dbconn.connect(DB_PATH)
     lines += sell_review.escalation_lines(_src)
     _src.close()
 
@@ -260,7 +261,7 @@ def _alert(msg: str):
 def _heartbeat(job: str = "daily_brief"):
     """Record a successful run timestamp so the watchdog can detect silent failures."""
     try:
-        con = sqlite3.connect(DB_PATH)
+        con = dbconn.connect(DB_PATH)
         con.execute("CREATE TABLE IF NOT EXISTS heartbeat("
                     "job TEXT PRIMARY KEY, last_success_utc TEXT)")
         con.execute("INSERT OR REPLACE INTO heartbeat VALUES (?,?)",

@@ -6,6 +6,7 @@ happened (launchd no-show, machine asleep, job unloaded). Reads the last success
 timestamp and alerts via Telegram if it's too old.
 """
 import os, sqlite3, datetime
+import dbconn
 from pathlib import Path
 import requests
 
@@ -32,7 +33,7 @@ def _alert(msg):
 
 def check():
     try:
-        con = sqlite3.connect(DB_PATH)
+        con = dbconn.connect(DB_PATH)
         row = con.execute(
             "SELECT last_success_utc FROM heartbeat WHERE job=?", (JOB,)).fetchone()
         con.close()
