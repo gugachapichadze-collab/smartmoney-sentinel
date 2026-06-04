@@ -79,6 +79,46 @@ def _hist_fcf_cagr(t) -> Optional[float]:
         return None
 
 
+def _computed_fcf(t, info) -> float:
+    """Owner's FCF from the cash-flow statement, SBC-adjusted.
+
+    info["freeCashflow"] is unreliable (e.g. ~$46B for NVDA vs the statement's
+    ~$96.7B) and ignores stock-based comp. Compute it directly:
+        Operating Cash Flow + Capital Expenditure (capex is negative) - SBC
+    Fall back to info["freeCashflow"] only if the statement is missing.
+    """
+    try:
+        cf = t.cashflow
+        if cf is None or cf.empty:
+            return float(_safe(info, "freeCashflow", 0) or 0)
+
+        def pick(df, names):
+            for n in names:
+                if n in df.index:
+                    val = df.loc[n].iloc[0]
+                    if val is not None:
+                        try:
+                            fv = float(val)
+                        except (TypeError, ValueError):
+                            continue
+                        if fv == fv:  # NaN guard
+                            return fv
+            return None
+
+        ocf = pick(cf, ["Operating Cash Flow", "Total Cash From Operating Activities",
+                        "OperatingCashFlow",
+                        "Cash Flow From Continuing Operating Activities"])
+        capex = pick(cf, ["Capital Expenditure", "Capital Expenditures",
+                          "CapitalExpenditures"])
+        sbc = pick(cf, ["Stock Based Compensation", "StockBasedCompensation"]) or 0.0
+
+        if ocf is None or capex is None:
+            return float(_safe(info, "freeCashflow", 0) or 0)
+        return ocf + capex - sbc
+    except Exception:
+        return float(_safe(info, "freeCashflow", 0) or 0)
+
+
 def _analyst_growth(t, info) -> Optional[float]:
     """Forward growth estimate. Prefer earnings growth, fall back to revenue."""
     g = _safe(info, "earningsGrowth") or _safe(info, "revenueGrowth")
@@ -193,7 +233,7 @@ def fetch(ticker: str, api_key: str = "", ath: float = 0.0,
                             moat=moat, is_etf=True, raw_info=info)
 
     shares = _safe(info, "sharesOutstanding", 0) or 0
-    fcf_total = _safe(info, "freeCashflow", 0) or 0
+    fcf_total = _computed_fcf(t, info)
     revenue = _safe(info, "totalRevenue", 0) or 0
     fcf_ps = (fcf_total / shares) if shares else 0.0
     fcf_margin = (fcf_total / revenue) if revenue else 0.0
