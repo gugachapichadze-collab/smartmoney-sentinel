@@ -43,6 +43,8 @@ def _fresh_earnings(f) -> bool:
 
 ATH_BUFFER = 0.05
 NVDA_MAX_WEIGHT = 0.45
+MAX_ANY_WEIGHT = 0.45   # absolute portfolio-weight ceiling for ANY position;
+                        # can be breached by price drift alone — review flag, never a sell
 CORE_TICKERS = {"NVDA", "MSFT", "AVGO", "GOOGL"}
 
 
@@ -296,7 +298,15 @@ def position_health(f: Fundamentals, weight: float) -> dict:
         cap = 1.0
     else:
         cap = 0.20
-    if weight > cap:
+    concentration_hit = weight > cap
+    if concentration_hit:
         flags.append(f"CONCENTRATION: {weight:.0%}>{cap:.0%} cap")
+    # Drift is the safety net for positions whose per-ticker cap is loose
+    # (CORE_TICKERS cap=1.0): only fire when the absolute ceiling is breached
+    # AND the per-ticker CONCENTRATION rule did not already catch it.
+    if weight > MAX_ANY_WEIGHT and not concentration_hit:
+        flags.append(
+            f"CONCENTRATION-DRIFT: {weight:.0%}>{MAX_ANY_WEIGHT:.0%} ceiling "
+            f"(price drift, review only)")
     return {"ticker": f.ticker, "quality_ok": not fails,
             "weight": weight, "flags": flags}
