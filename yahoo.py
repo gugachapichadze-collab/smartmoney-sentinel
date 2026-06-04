@@ -15,6 +15,41 @@ import yfinance as yf
 from engine import Fundamentals
 
 
+class DataQualityError(ValueError):
+    """Raised when a REQUIRED numeric field can't be recovered from raw API
+    data. Subclasses ValueError so sentinel.run_engine's existing per-ticker
+    `except Exception` treats it as a clean drop (logged under DATA ERRORS:),
+    not a pipeline crash."""
+
+
+_BAD_NUMERIC_STRINGS = {"", "n/a", "na", "none", "null", "-", "--", "nan"}
+
+
+def _num(value, default=0.0):
+    """Coerce an arbitrary API value to a FINITE float, else `default`.
+
+    Never raises. Catches junk strings ('N/A','','-') that crash float()
+    and NaN/inf that silently defeat downstream comparisons (a NaN margin
+    otherwise passes `x < floor` as False and slips past hard_floors)."""
+    if value is None:
+        return default
+    if isinstance(value, bool):            # bool is int subclass; don't map True->1.0
+        return default
+    if isinstance(value, (int, float)):
+        v = float(value)
+        return v if (v == v and v not in (float("inf"), float("-inf"))) else default
+    if isinstance(value, str):
+        s = value.strip()
+        if s.lower() in _BAD_NUMERIC_STRINGS:
+            return default
+        try:
+            v = float(s.replace(",", ""))
+        except (TypeError, ValueError):
+            return default
+        return v if (v == v and v not in (float("inf"), float("-inf"))) else default
+    return default
+
+
 def _safe(d, key, default=None):
     v = d.get(key, default)
     return v if v is not None else default
@@ -90,7 +125,7 @@ def _computed_fcf(t, info) -> float:
     try:
         cf = t.cashflow
         if cf is None or cf.empty:
-            return float(_safe(info, "freeCashflow", 0) or 0)
+            return _num(_safe(info, "freeCashflow"))
 
         def pick(df, names):
             for n in names:
@@ -113,10 +148,10 @@ def _computed_fcf(t, info) -> float:
         sbc = pick(cf, ["Stock Based Compensation", "StockBasedCompensation"]) or 0.0
 
         if ocf is None or capex is None:
-            return float(_safe(info, "freeCashflow", 0) or 0)
+            return _num(_safe(info, "freeCashflow"))
         return ocf + capex - sbc
     except Exception:
-        return float(_safe(info, "freeCashflow", 0) or 0)
+        return _num(_safe(info, "freeCashflow"))
 
 
 def _analyst_growth(t, info) -> Optional[float]:
@@ -219,43 +254,51 @@ def fetch(ticker: str, api_key: str = "", ath: float = 0.0,
     t = yf.Ticker(ticker)
     info = t.info or {}
 
-    price = _safe(info, "currentPrice") or _safe(info, "regularMarketPrice") or 0.0
-    price = float(price or 0)
-    if price <= 0:
-        raise ValueError(f"{ticker}: no valid price (got {price})")
+    # REQUIRED field: without a valid price we can value nothing -> clean drop.
+    price = _num(_safe(info, "currentPrice"), default=None)
+    if price is None or price <= 0:
+        price = _num(_safe(info, "regularMarketPrice"), default=None)
+    if price is None or price <= 0:
+        raise DataQualityError(
+            f"{ticker}: no valid price "
+            f"(currentPrice={info.get('currentPrice')!r}, "
+            f"regularMarketPrice={info.get('regularMarketPrice')!r})")
 
     if is_etf:
         return Fundamentals(ticker=ticker, price=price, fcf_per_share=0.0,
                             roic=0.0, gross_margin=0.0, fcf_margin=0.0,
                             rev_growth=0.0, net_debt_ebitda=0.0,
-                            ath=float(ath or _safe(info,"fiftyTwoWeekHigh",0) or price),
-                            market_cap=float(_safe(info,"marketCap",0) or 0),
+                            ath=(_num(ath) or _num(_safe(info,"fiftyTwoWeekHigh")) or price),
+                            market_cap=_num(_safe(info,"marketCap")),
                             moat=moat, is_etf=True, raw_info=info)
 
-    shares = _safe(info, "sharesOutstanding", 0) or 0
-    fcf_total = _computed_fcf(t, info)
-    revenue = _safe(info, "totalRevenue", 0) or 0
+    shares = _num(_safe(info, "sharesOutstanding"))
+    fcf_total = _num(_computed_fcf(t, info))
+    revenue = _num(_safe(info, "totalRevenue"))
     fcf_ps = (fcf_total / shares) if shares else 0.0
     fcf_margin = (fcf_total / revenue) if revenue else 0.0
 
     roic = _real_roic(t)
     roic_is_proxy = False
     if roic is None:
-        roic = float(_safe(info, "returnOnEquity", 0) or 0)
+        roic = _num(_safe(info, "returnOnEquity"))
         roic_is_proxy = True
+    else:
+        roic = _num(roic)
 
-    gross_margin = float(_safe(info, "grossMargins", 0) or 0)
-    rev_growth = float(_safe(info, "revenueGrowth", 0) or 0)
+    gross_margin = _num(_safe(info, "grossMargins"))
+    rev_growth = _num(_safe(info, "revenueGrowth"))
 
-    total_debt = _safe(info, "totalDebt", 0) or 0
-    cash = _safe(info, "totalCash", 0) or 0
-    ebitda = _safe(info, "ebitda", 0) or 0
+    total_debt = _num(_safe(info, "totalDebt"))
+    cash = _num(_safe(info, "totalCash"))
+    ebitda = _num(_safe(info, "ebitda"))
     nde = ((total_debt - cash) / ebitda) if ebitda else 0.0
     if nde < 0:
         nde = 0.0
 
+    ath = _num(ath)
     if not ath:
-        ath = _safe(info, "fiftyTwoWeekHigh", 0) or price
+        ath = _num(_safe(info, "fiftyTwoWeekHigh")) or price
 
     _pe_days, _pe_surprise, _pe_drift = _post_earnings_context(t, price)
     _chg90, _above_low = _trend_context(t, price, info)
@@ -270,12 +313,12 @@ def fetch(ticker: str, api_key: str = "", ath: float = 0.0,
         fcf_margin=float(fcf_margin),
         rev_growth=rev_growth,
         net_debt_ebitda=float(nde),
-        ath=float(ath or 0),
+        ath=_num(ath),
         raw_info=info,
-        forward_pe=_safe(info, 'forwardPE', None),
-        enterprise_value=_safe(info, 'enterpriseValue', None),
-        ebitda_val=_safe(info, 'ebitda', None),
-        market_cap=float(_safe(info, "marketCap", 0) or 0),
+        forward_pe=_num(_safe(info, 'forwardPE'), default=None),
+        enterprise_value=_num(_safe(info, 'enterpriseValue'), default=None),
+        ebitda_val=_num(_safe(info, 'ebitda'), default=None),
+        market_cap=_num(_safe(info, "marketCap")),
         analyst_growth=_analyst_growth(t, info),
         hist_fcf_cagr=_hist_fcf_cagr(t),
         moat=moat,
