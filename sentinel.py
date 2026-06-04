@@ -65,7 +65,7 @@ def run_engine():
     con = journal_init()
     holdings = load("holdings.json").get("holdings", [])
     watch = load("watchlist.json").get("watchlist", [])
-    all_verdicts, watch_proximity, health_flags, errors = [], [], [], []
+    all_verdicts, watch_proximity, health_flags, errors, fetched = [], [], [], [], []
 
     for w in watch:
         try:
@@ -82,6 +82,7 @@ def run_engine():
             trig = w.get("trigger")
             if trig and f.price <= trig * 1.05 and not v.rejected:
                 watch_proximity.append((v, f, trig))
+            fetched.append((f.ticker, getattr(f, "raw_info", {}) or {}))
         except Exception as e:
             errors.append(f"{w['ticker']}: {e}")
 
@@ -97,12 +98,14 @@ def run_engine():
             journal_write(con, "hold", v, f.price)
             if hp["flags"]:
                 health_flags.append((hp, f))
+            fetched.append((f.ticker, getattr(f, "raw_info", {}) or {}))
         except Exception as e:
             errors.append(f"{h['ticker']}: {e}")
 
     con.close()
     buys = rank_buys([v for v, _, _ in all_verdicts])[:MAX_ACTIONS]
-    return buys, watch_proximity, health_flags, errors
+    degraded = _degraded_tickers(fetched)
+    return buys, watch_proximity, health_flags, errors, degraded
 
 
 def learning_readback():
@@ -122,7 +125,29 @@ def learning_readback():
         return ""
 
 
-def build_payload(buys, prox, health, errors):
+def _degraded_tickers(fetched):
+    """Names that ran SINGLE-SOURCE this run: eligible for the FMP cross-check
+    (non-ETF) but FMP was unavailable (no key / paywalled / errored), so the read
+    rests on Yahoo alone. Detected via the data_source_note the firewall stamps in
+    raw_info. ETFs (note unset) and dual-sourced names excluded. Order preserved,
+    deduped. Per-ticker by design — no blanket banner."""
+    seen, out = set(), []
+    for ticker, raw in fetched:
+        note = (raw or {}).get("data_source_note", "")
+        if note.startswith("single-source") and ticker not in seen:
+            seen.add(ticker)
+            out.append(ticker)
+    return out
+
+
+def _single_source_lines(degraded):
+    """Brief line(s) for single-source names. Empty list when none -> stays silent."""
+    if not degraded:
+        return []
+    return [f"\nSingle-source today (no cross-check): {', '.join(degraded)}."]
+
+
+def build_payload(buys, prox, health, errors, degraded=()):
     def g(x): return f"{x:+.1%}" if x is not None else "n/a"
     lines = [f"DATE: {DATE}", f"HURDLE: {HURDLE:.0%}", f"MONTHLY BUDGET: USD {MONTHLY_BUDGET}", ""]
 
@@ -179,6 +204,8 @@ def build_payload(buys, prox, health, errors):
     rb = learning_readback()
     if rb:
         lines.append(f"\nLEARNING LOOP (historical signal calibration): {rb}")
+
+    lines += _single_source_lines(degraded)
 
     if errors:
         lines.append("\nDATA ERRORS:")
@@ -278,8 +305,8 @@ def _heartbeat(job: str = "daily_brief"):
 
 
 def main():
-    buys, prox, health, errors = run_engine()
-    payload = build_payload(buys, prox, health, errors)
+    buys, prox, health, errors, degraded = run_engine()
+    payload = build_payload(buys, prox, health, errors, degraded)
     print(payload)
     deliver(narrate(payload))
     _heartbeat("daily_brief")   # mark success AFTER delivery
